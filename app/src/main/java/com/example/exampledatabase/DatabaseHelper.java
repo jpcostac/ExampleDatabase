@@ -14,16 +14,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final int DATABASE_VERSION = 1;
 
     public DatabaseHelper(Context context){
-        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        super(context,DATABASE_NAME, null, DATABASE_VERSION);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        String createTable = "CREATE TABLE contatos(id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, telefone TEXT, email TEXT)";
+        String createTableContato = "CREATE TABLE contatos(id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT, telefone TEXT,email TEXT)";
 
-        String createTablePerfil ="CREATE TABLE perfil(id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, url TEXT, fkContato INTEGER, FOREIGN KEY (fkContato) REFERENCES contato(id))";
+        String createTablePerfil = "CREATE TABLE perfil(id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT, url TEXT, fkContato INTEGER, FOREIGN KEY(fkContato)REFERENCES contatos(id))";
 
-        db.execSQL(createTable);
+        db.execSQL(createTableContato);
         db.execSQL(createTablePerfil);
     }
 
@@ -34,37 +34,40 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    //Método para inserir um contato
-    public boolean inserirContato(String nomeContato, String telefone, String email, String nomePerfil, String url){
-        SQLiteDatabase db= this.getWritableDatabase();
+
+    //METODO PARA INSERIR UM CONTATO
+    public boolean inserirContato(String nomeContato, String telefone, String email,String nomePerfil, String url){
+        SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         long resultado = 0;
-
-        values.put("nome", nomeContato);
-        values.put("telefone", telefone);
-        values.put("email", email);
+        values.put("nome", nomePerfil);
+        values.put("email",email);
+        values.put("url", url);
 
         try{
-            db.insert("contatos", null, values);
-            this.inserirPerfil(nomePerfil, url, id);
-        }catch (SQLException e){
+            int id = (int) db.insert("contatos",null,values);
+            if(id==-1 && this.inserirPerfil(nomePerfil, url, id) == false) {
+                resultado=-1;
+            }
+        } catch (SQLException e){
             Log.e("Erro",e.getMessage());
-            resultado = -1;
         }finally {
             db.close();
         }
-
         return resultado != -1;
     }
 
-    //Método para listar os contatos
-    public Cursor listarContato(){
-        SQLiteDatabase db = this.getReadableDatabase();
+    
+    //METODO PARA LISTAR OS CONTATOS
+    public Cursor listarContatos(){
+        SQLiteDatabase db = this.getWritableDatabase();
+
         return db.rawQuery("SELECT * FROM contatos", null);
     }
 
-    //Método para atualizar um contato
-    public boolean atualizarContato(int id, String nome, String telefone, String email){
+
+    //METODO PARA ATUALIZAR UM CONTATO
+    public boolean atualizarContato(int id, String nome, String telefone, String email,int idPerfil, String nomePerfil, String url) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
 
@@ -72,47 +75,98 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("telefone", telefone);
         values.put("email", email);
 
-        long resultado = db.update("contatos", values, "id=?", new String[]{String.valueOf(id)});
-        db.close();
-
-        return resultado > 0;
+        try {
+            if (db.update("contatos", values, "id=?", new String[]{String.valueOf(id)}) == 0) {
+                return false;
+            }
+            this.atualizarPerfil(idPerfil, nomePerfil, url);
+        } catch (SQLException e) {
+            Log.e("Erro", e.getMessage());
+            return false;
+        } finally {
+            db.close();
+        }
+        return true;
     }
 
-    //Método para excluir um contato
+
+    //METODO PARA EXCLUIR CONTATO
     public boolean excluirContato(int id){
         SQLiteDatabase db = this.getWritableDatabase();
-        long resultado = db.delete("contatos", "id = ?", new String[]{String.valueOf(id)});
-
-        db.close();
-        return  resultado > 0;
+        try{
+            if(db.delete("contatos", "id=?",new String[]{String.valueOf(id)}) == 0 && this.excluirPerfil(id) == false);
+        }catch(SQLException e){
+            Log.e("Erro", e.getMessage());
+        }finally {
+            db.close();
+        }
+        return true;
     }
 
-    //Método para listar os perfis de um contato
+
+    //Método para Listar os perfis de um contato
     public Cursor listarPerfis(int idContato){
         SQLiteDatabase db = this.getReadableDatabase();
-
-        return db.rawQuery("SELECT nome, url FROM perfil WHERE fkContato =?", new String[]{String.valueOf(idContato)});
+        return db.rawQuery("SELECT nome, url FROM perfil WHERE fkContato=?",new String[]{String.valueOf(idContato)});
     }
 
-    //Método para listar os contatos com seus respectivos perfis
-    public Cursor listarContatosComPerfil(){
+
+    //Métodos para listar os contatos com seus respectivos perfis
+    public Cursor listarContatoComPerfis(){
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.rawQuery("SELECT c.id, c.nome, c.telefone, c.email, p.nome, p.url FROM contatos c" +
-                " JOIN perfil p ON c.id = p.fkContato ORDER BY c.nome", null);
+        return db.rawQuery("SELECT c.id, c.nome, c.telefone, c.email, p.nome, p.url FROM contatos c JOIN perfil p ON c.id = p.fkContato ORDER BY c.nome", null);
     }
 
-    //Método para inserir um perfil
-    public boolean inserirPerfil(String nome, String url, int idContato){
+
+    //Método para inserir um Perfil
+    private boolean inserirPerfil(String nome, String url, int idContato){
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+
+        values.put("nome", nome);
+        values.put("url",url);
+        values.put("fkContato",idContato);
+
+        long resultado = db.insert("perfil",null,values);
+
+        db.close();
+
+        return resultado != -1;
+    }
+
+
+    //Método para atualizar o perfil de um contato
+    private boolean atualizarPerfil(int id,String nome, String url) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
 
         values.put("nome", nome);
         values.put("url", url);
-        values.put("fkContato", idContato);
 
-        long resultado = db.insert("perfil", null, values);
-        db.close();
+        try {
+            if(db.update("contatos", values, "id=?", new String[]{String.valueOf(id)}) == 0){
+                return false;
+            }
+        } catch (SQLException e) {
+            Log.e("Erro", e.getMessage());
+            return false;
+        } finally {
+            db.close();
+        }
+        return true;
+    }
 
-        return resultado != -1;
+
+    //METODO PARA EXCLUIR O PERFIL
+    public boolean excluirPerfil(int id){
+        SQLiteDatabase db = this.getWritableDatabase();
+        try{
+            if(db.delete("perfil","fkContato=?", new String[]{String.valueOf(id)})== 0) return false;
+        }catch (SQLException e){
+            Log.e("Erro", e.getMessage());
+        }finally {
+            db.close();
+        }
+        return true;
     }
 }
